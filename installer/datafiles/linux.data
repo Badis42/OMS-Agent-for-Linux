@@ -76,6 +76,13 @@ fi
 # Ensure omsagent is in the omiusers group, but leave omsagent as a group
 /usr/sbin/usermod -g omiusers omsagent 1> /dev/null 2> /dev/null
 
+# TODO add ulimit for nproc for omsagent:
+# In /etc/security/limits.conf, check for the line
+# omsagent        hard    nproc           50 
+# If such a line is not present, add it (make sure I look for
+# ^omsagent[whitespace]hard|soft[whitespace]nproc[whitespace][0-9]+$
+# as a regex)
+
 # Add the 'nxautomation' group if it does not already exist
 # (Can't use useradd with -U since that doesn't exist on older systems)
 egrep -q "^nxautomation:" /etc/group
