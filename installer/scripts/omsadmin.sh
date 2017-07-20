@@ -273,6 +273,7 @@ parse_args()
             REMOVE_ALL=1
             ;;
         M)
+            MIGRADE_AGENT_ID=1
             MIGRATE_OLD_WS=1
             MIGRATE_OLD_PROXY_CONF=1
             ;;
@@ -837,6 +838,15 @@ list_workspaces()
     return 0
 }
 
+migrate_to_single_agent_id()
+{
+    # If there are any workspaces configured, move the agent GUID to the central location
+    if [ -f $CONF_OMSADMIN -a ! -f $AGENTGUID_FILE ]; then
+        AGENT_GUID=`grep AGENT_GUID $CONF_OMSADMIN | cut -d= -f2`
+        save_agent_guid
+    fi
+}
+
 migrate_old_workspace()
 {
     if [ -d $DF_CONF_DIR -a ! -h $DF_CONF_DIR -a -f $DF_CONF_DIR/omsadmin.conf ]; then
@@ -867,10 +877,6 @@ migrate_old_workspace()
         if [ -f $DF_CONF_DIR/proxy.conf ]; then
             cp -pf $DF_CONF_DIR/proxy.conf $ETC_DIR
         fi
-
-        # Like proxy above, this information will merely be copied. Re-onboarding will do the work of removing the second copy of AGENT_GUID.
-        AGENT_GUID=`grep AGENT_GUID $DF_CONF_DIR/omsadmin.conf | cut -d= -f2`
-        save_agent_guid
 
         update_symlinks
     fi
@@ -1100,6 +1106,10 @@ main()
 
     if [ "$LIST_WORKSPACES" = "1" ]; then
         list_workspaces || clean_exit 1
+    fi
+
+    if [ "$MIGRADE_AGENT_ID" = "1" ]; then
+        migrate_to_single_agent_id || clean_exit 1
     fi
 
     if [ "$MIGRATE_OLD_WS" = "1" ]; then
