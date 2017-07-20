@@ -1,8 +1,11 @@
 %Variables
-PF:           'Linux'
-OMI_SERVICE:  '/opt/omi/bin/service_control'
-OMS_SERVICE:  '/opt/microsoft/omsagent/bin/service_control'
-CONF_SYSLOG:  '/opt/microsoft/omsagent/bin/configure_syslog.sh'
+PF:                   'Linux'
+OMI_SERVICE:          '/opt/omi/bin/service_control'
+OMS_SERVICE:          '/opt/microsoft/omsagent/bin/service_control'
+CONF_SYSLOG:          '/opt/microsoft/omsagent/bin/configure_syslog.sh'
+PROC_LIMIT_CONF:      '/tmp/limits.conf'
+# TODO change PROC_LIMIT_CONF to /etc/security/limits.conf once testing is complete
+OMSAGENT_PROC_LIMIT:  1000
 
 %Directories
 /etc;                                                   755; root; root; sysdir
@@ -76,18 +79,15 @@ fi
 # Ensure omsagent is in the omiusers group, but leave omsagent as a group
 /usr/sbin/usermod -g omiusers omsagent 1> /dev/null 2> /dev/null
 
-# TODO add ulimit for nproc for omsagent:
-# In /etc/security/limits.conf, check for the line
-# omsagent        hard    nproc           50 
-# If such a line is not present, add it (make sure I look for
-# ^omsagent[whitespace]hard|soft[whitespace]nproc[whitespace][0-9]+$
-# as a regex)
-# IDEA: use is_scom_port_open() functionality from omsadmin.sh for parsing
-# TODO HERE
-for line in `cat /etc/security/limits.conf | grep -E '^[ ]*omsagent[ ]+(?:hard|soft)[ ]+nproc[ ]+[0-9]+[ ]*$'`
-do
-    echo $line > /dev/null 2>&1
-done
+# In /etc/security/limits.conf, check for any omsagent nproc line
+# If such a line is not present, add the default limit
+cat ${{PROC_LIMIT_CONF}} | grep -E '^[ ]*omsagent[ ]+(?:hard|soft)[ ]+nproc[ ]+[0-9]+[ ]*$' > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "Process limit has already been set in ${{PROC_LIMIT_CONF}}"
+else
+    echo "Setting process limit for the omsagent user in ${{PROC_LIMIT_CONF}}"
+    echo "omsagent  hard  nproc  ${{OMSAGENT_PROC_LIMIT}}" >> ${{PROC_LIMIT_CONF}}
+fi
 
 # Add the 'nxautomation' group if it does not already exist
 # (Can't use useradd with -U since that doesn't exist on older systems)

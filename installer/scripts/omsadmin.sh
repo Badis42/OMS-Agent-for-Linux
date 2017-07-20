@@ -87,8 +87,8 @@ DEFAULT_MONITOR_AGENT_PORT=25324
 SYSLOG_PORT=$DEFAULT_SYSLOG_PORT
 MONITOR_AGENT_PORT=$DEFAULT_MONITOR_AGENT_PORT
 
-NPROC_ULIMIT=200
-# TODO - add an interface to set this to something different
+OMSAGENT_PROC_LIMIT=1000
+PROC_LIMIT_CONF=/etc/security/limits.conf
 
 # SCOM variables
 SCX_SSL_CONFIG=/opt/microsoft/scx/bin/tools/scxsslconfig
@@ -146,6 +146,9 @@ usage()
     echo
     echo "Azure resource ID:"
     echo "$basename -a <Azure resource ID>"
+    echo
+    echo "Modify process limit for OMSAgent:"
+    echo "$basename -n <number limit>"
 }
 
 set_user_agent()
@@ -224,7 +227,7 @@ parse_args()
 {
     local OPTIND opt
 
-    while getopts "h?s:w:d:vp:u:a:lx:XMm:" opt; do
+    while getopts "h?s:w:d:vp:u:a:lx:XMm:n" opt; do
         case "$opt" in
         h|\?)
             usage
@@ -271,6 +274,10 @@ parse_args()
             ;;
         m)
             MULTI_HOMING_MARKER=$OPTARG
+            ;;
+        n)
+            SET_OMSAGENT_ULIMIT=1
+            NEW_ULIMIT=$OPTARG
             ;;
         esac
     done
@@ -342,6 +349,26 @@ set_proxy_setting()
         PROXY_SETTING="--proxy $conf_proxy_content"
         log_info "Using proxy settings from '$CONF_PROXY'"
     fi
+}
+
+set_user_proc_limit() # TODO write an interface to call this method
+{
+    # Parameter: number to set the omsagent process limit to
+    if [ $# -ne 1 ]; then
+        # TODO if I parse this arg out, then I will need to save it in a var, not just pass it along... how do other interfaces do it?
+        return $INVALID_CONFIG
+    fi
+cat ${{PROC_LIMIT_CONF}} | grep -E '^[ ]*omsagent[ ]+(?:hard|soft)[ ]+nproc[ ]+[0-9]+[ ]*$' > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "Process limit has already been set in ${{PROC_LIMIT_CONF}}"
+else
+    echo "Setting process limit for the omsagent user in ${{PROC_LIMIT_CONF}}"
+    echo "omsagent  hard  nproc  ${{OMSAGENT_PROC_LIMIT}}" >> ${{PROC_LIMIT_CONF}}
+fi
+# SET_OMSAGENT_ULIMIT=1
+# NEW_ULIMIT=$OPTARG
+
+# TODO HERE
 }
 
 is_scom_port_open()
@@ -1051,6 +1078,10 @@ main()
             usage
             clean_exit $INVALID_OPTION_PROVIDED
         fi
+    fi
+
+    if [ "$SET_OMSAGENT_ULIMIT" = "1" ]; then
+        set_user_proc_limit || clean_exit 1 # TODO make these names consistent
     fi
 
     if [ "$ONBOARDING" = "1" ]; then
